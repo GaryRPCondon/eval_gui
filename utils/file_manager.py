@@ -102,7 +102,13 @@ class FileManager:
                     parts = filename.split('-')
                     
                     if len(parts) >= 3:
-                        timestamp = f"{parts[0]}-{parts[1]}"
+                        # Parse full timestamp: 2025-08-05_122134 format
+                        timestamp_part = f"{parts[0]}-{parts[1]}-{parts[2]}"
+                        # Handle cases where the timestamp includes time (YYYY-MM-DD_HHMMSS)
+                        if '_' in timestamp_part:
+                            timestamp = timestamp_part  # Keep full timestamp with time
+                        else:
+                            timestamp = f"{parts[0]}-{parts[1]}"  # Fallback for older format
                         scenario_parts = []
                         model_parts = []
                         

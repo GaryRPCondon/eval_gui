@@ -147,6 +147,10 @@ class ResultsViewer:
         else:
             st.info(f"Showing {len(filtered_df)} of {len(results_df)} total results")
             
+            # Sort by timestamp descending to show newest first
+            if 'timestamp' in filtered_df.columns:
+                filtered_df = filtered_df.sort_values('timestamp', ascending=False)
+            
             # Display as data table with available columns
             display_columns = [
                 "timestamp", "scenario_id", "model_name", "bias_score", 
@@ -169,6 +173,25 @@ class ResultsViewer:
         # Get available reports
         try:
             reports = file_manager.get_evaluation_reports()
+            
+            # Re-sort reports by timestamp descending to ensure proper order
+            from datetime import datetime
+            def parse_timestamp(timestamp_str):
+                try:
+                    # Handle timestamp format: 2025-08-05_122134
+                    if '_' in timestamp_str:
+                        return datetime.strptime(timestamp_str, "%Y-%m-%d_%H%M%S")
+                    # Handle date only format: 2025-08-05
+                    elif len(timestamp_str.split('-')) >= 3:
+                        return datetime.strptime(timestamp_str, "%Y-%m-%d")
+                    # Handle year-month only: 2025-08
+                    else:
+                        return datetime.strptime(timestamp_str, "%Y-%m")
+                except:
+                    return datetime.min
+            
+            reports = sorted(reports, key=lambda x: parse_timestamp(x['timestamp']), reverse=True)
+            
         except Exception as e:
             st.error(f"Failed to load reports: {e}")
             return
@@ -177,11 +200,16 @@ class ResultsViewer:
             st.info("No detailed reports available")
             return
         
-        # Report selection
+        # Debug: show first and last report timestamps to verify sorting
+        st.caption(f"Found {len(reports)} reports. Newest: {reports[0]['timestamp']}, Oldest: {reports[-1]['timestamp']}")
+        
+        # Report selection - default to newest (index 0) since reports are sorted descending
         report_options = [f"{r['timestamp']} - {r['scenario_id']} - {r['model']}" for r in reports]
+            
         selected_index = st.selectbox(
             "Select Report",
             range(len(report_options)),
+            index=0,  # First item is newest after proper sorting
             format_func=lambda x: report_options[x] if x < len(report_options) else "",
             key="detailed_report_selector"
         )
