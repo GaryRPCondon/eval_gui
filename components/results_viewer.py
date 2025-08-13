@@ -41,34 +41,20 @@ class ResultsViewer:
         
         return {"status": "displayed"}
     
-    def render_history(self) -> Dict[str, Any]:
-        """Render history-focused interface"""
-        
-        st.header("Evaluation History")
-        
-        # Load research results
-        try:
-            results_df = file_manager.get_research_results()
-        except Exception as e:
-            st.error(f"Failed to load results: {e}")
-            return {"status": "error"}
-        
-        if results_df is None or results_df.empty:
-            st.info("No evaluation results found. Run an evaluation to see results here.")
-            return {"status": "no_results"}
-        
-        # Render history view with different key prefix
-        self._render_results_history(results_df, key_prefix="history")
-        
-        return {"status": "displayed"}
     
     def _render_latest_results(self, results_df: pd.DataFrame):
         """Display the most recent evaluation results"""
         
         st.subheader("Latest Evaluations")
         
-        # Get the 10 most recent results
-        latest_results = results_df.head(10)
+        # Sort by timestamp descending and get the 10 most recent results
+        if 'timestamp' in results_df.columns:
+            sorted_df = results_df.sort_values('timestamp', ascending=False)
+        else:
+            # Fallback: reverse the dataframe to get latest entries
+            sorted_df = results_df.iloc[::-1]
+        
+        latest_results = sorted_df.head(10)
         
         if latest_results.empty:
             st.info("No recent results available")

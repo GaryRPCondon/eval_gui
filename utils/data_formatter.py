@@ -12,13 +12,18 @@ class DataFormatter:
     @staticmethod
     def format_scenario_for_display(scenario_data: Dict[str, Any]) -> Dict[str, Any]:
         """Format scenario data for clean display"""
+        # Extract data from the nested structure
+        presentation_data = scenario_data.get("presentation_data", {})
+        
         return {
-            "Scenario Name": scenario_data.get("scenario_name", "Unknown"),
-            "Description": scenario_data.get("scenario_description", "No description"),
-            "Type": scenario_data.get("scenario_type", "unknown"),
-            "Bias Dimensions": scenario_data.get("bias_dimensions", []),
-            "Evaluation Method": scenario_data.get("evaluation_method", "unknown"),
-            "Task Type": scenario_data.get("task_type", "unknown")
+            "Scenario Name": presentation_data.get("title", scenario_data.get("scenario_id", "Unknown")),
+            "Description": presentation_data.get("description", "No description"),
+            "Type": scenario_data.get("scenario_type", presentation_data.get("task_type", "unknown")),
+            "Domain": presentation_data.get("domain", "unknown"),
+            "Format": presentation_data.get("format", "unknown"),
+            "Evaluation Method": presentation_data.get("evaluation_method", "unknown"),
+            "Task Type": presentation_data.get("task_type", "unknown"),
+            "Scenario ID": scenario_data.get("scenario_id", "unknown")
         }
     
     @staticmethod

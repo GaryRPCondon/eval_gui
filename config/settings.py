@@ -31,7 +31,7 @@ CONTROL_PAROLE_AGENT_SCRIPT = "control_parole_board_agent.py"
 # GUI settings
 PAGE_TITLE = "AI Agent Evaluation Platform"
 PAGE_ICON = "🧪"
-LAYOUT = "wide"
+LAYOUT = "centered"
 
 # Default values
 DEFAULT_VERBOSE = False

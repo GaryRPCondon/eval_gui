@@ -27,7 +27,7 @@ class ScenarioBrowser:
             return {"selected_scenario": None}
         
         # Create scenario selection
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns([2, 3])
         
         with col1:
             # Filter by type
@@ -92,7 +92,7 @@ class ScenarioBrowser:
                 return
             
             # Create tabs for different views
-            tab1, tab2, tab3 = st.tabs(["Overview", "JSON Tree", "Raw JSON"])
+            tab1, tab2 = st.tabs(["Overview", "Raw JSON"])
             
             with tab1:
                 # Formatted overview
@@ -106,12 +106,7 @@ class ScenarioBrowser:
                         st.text(f"{key}: {value}")
             
             with tab2:
-                # Tree view of JSON structure
-                tree_display = data_formatter.format_json_for_tree_display(scenario_data)
-                st.code(tree_display, language="json")
-            
-            with tab3:
-                # Raw JSON view
+                # Interactive JSON view with native Streamlit expandable nodes
                 st.json(scenario_data)
                 
         except Exception as e:
