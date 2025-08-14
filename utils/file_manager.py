@@ -109,12 +109,30 @@ class FileManager:
                             timestamp = timestamp_part  # Keep full timestamp with time
                         else:
                             timestamp = f"{parts[0]}-{parts[1]}"  # Fallback for older format
+                        
+                        # Extract evaluation_id if present (new format: YYYY-MM-DD_HHMMSS-evaluation_id.md)
+                        evaluation_id = ""
+                        scenario_start_index = 3  # Default start for scenario parts
+                        
+                        if len(parts) == 3 and parts[1].startswith('mcp_eval_'):
+                            # Current format: timestamp-evaluation_id-model.md
+                            evaluation_id = parts[1]
+                            scenario_start_index = 2  # Model part starts at index 2
+                        elif len(parts) == 2 and parts[1].startswith('mcp_eval_'):
+                            # Old simplified format: timestamp-evaluation_id.md
+                            evaluation_id = parts[1]
+                            scenario_start_index = len(parts)  # No more parts to process
+                        elif len(parts) >= 4 and parts[1].startswith('mcp_eval_'):
+                            # Old longer format: timestamp-evaluation_id-scenario-model.md
+                            evaluation_id = parts[1]
+                            scenario_start_index = 2
+                        
                         scenario_parts = []
                         model_parts = []
                         
                         # Find where scenario ends and model begins
                         capturing_scenario = True
-                        for part in parts[2:]:
+                        for part in parts[scenario_start_index:]:
                             if capturing_scenario and any(model_indicator in part.lower() 
                                                        for model_indicator in ['gpt', 'claude', 'deepseek', 'grok']):
                                 capturing_scenario = False
@@ -124,14 +142,31 @@ class FileManager:
                             else:
                                 model_parts.append(part)
                         
-                        scenario_id = '-'.join(scenario_parts) if scenario_parts else "unknown"
-                        model = '-'.join(model_parts) if model_parts else "unknown"
+                        # Extract scenario and model info
+                        if evaluation_id:
+                            # Extract scenario from evaluation_id format: mcp_eval_scenario_xxxx
+                            eval_parts = evaluation_id.split('_')
+                            if len(eval_parts) >= 3:
+                                scenario_id = '_'.join(eval_parts[2:-1])  # Skip mcp_eval and last number
+                            else:
+                                scenario_id = "unknown"
+                            
+                            # Extract model from filename parts if available
+                            if scenario_start_index < len(parts):
+                                model = '-'.join(parts[scenario_start_index:])
+                            else:
+                                model = "unknown"  # Old format without model in filename
+                        else:
+                            # Original format - extract from filename parts
+                            scenario_id = '-'.join(scenario_parts) if scenario_parts else "unknown"
+                            model = '-'.join(model_parts) if model_parts else "unknown"
                         
                         reports.append({
                             "filename": report_file.name,
                             "timestamp": timestamp,
                             "scenario_id": scenario_id,
                             "model": model,
+                            "evaluation_id": evaluation_id,  # Add evaluation_id for linking
                             "file_path": str(report_file),
                             "size": report_file.stat().st_size
                         })
