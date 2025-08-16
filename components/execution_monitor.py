@@ -148,15 +148,14 @@ class ExecutionMonitor:
             
             # Check if provider supports temperature before adding the argument
             try:
-                import sys
-                import os
-                # Add the langgraph_agent directory to path to import config
-                langgraph_path = str(LANGGRAPH_AGENT_PATH)
-                if langgraph_path not in sys.path:
-                    sys.path.insert(0, langgraph_path)
-                from config import LLM_CONFIGS
+                import importlib.util
+                llm_providers_path = LANGGRAPH_AGENT_PATH.parent / "agent_eval_service" / "config" / "llm_providers.py"
+                spec = importlib.util.spec_from_file_location("llm_providers", llm_providers_path)
+                llm_providers_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(llm_providers_module)
                 
-                provider_supports_temp = LLM_CONFIGS.get(provider, {}).get("supports_temperature", True)
+                provider_config = llm_providers_module.get_provider_config(provider)
+                provider_supports_temp = provider_config.get("supports_temperature", True)
                 
                 # Add temperature if not default AND provider supports it
                 if temperature != 0.1 and provider_supports_temp:

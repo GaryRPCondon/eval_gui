@@ -14,24 +14,8 @@ class LLMSelector:
         
         st.header("Model Configuration")
         
-        # Get available providers - use direct config access as fallback
-        try:
-            providers = api_client.get_llm_providers()
-        except Exception:
-            # Fallback to reading from config directly
-            try:
-                import sys
-                import os
-                # Add the langgraph_agent directory to path
-                langgraph_path = str(Path(__file__).parent.parent.parent / "langgraph_agent")
-                if langgraph_path not in sys.path:
-                    sys.path.insert(0, langgraph_path)
-                from config import LLM_CONFIGS
-                providers = list(LLM_CONFIGS.keys())
-            except Exception as e:
-                st.error(f"Failed to load LLM providers: {e}")
-                st.info("Using default provider list")
-                providers = ["deepseek", "openai-gpt4o", "claude", "grok"]
+        # Get available providers from evaluation service API
+        providers = api_client.get_llm_providers()
         
         if not providers:
             st.warning("No LLM providers available")
@@ -98,24 +82,20 @@ class LLMSelector:
             if selected_provider:
                 st.subheader("Model Information")
                 # Try to get more details about the selected provider
-                try:
-                    # Import here to avoid path issues
-                    import sys
-                    import os
-                    # Add the langgraph_agent directory to path
-                    langgraph_path = str(Path(__file__).parent.parent.parent / "langgraph_agent")
-                    if langgraph_path not in sys.path:
-                        sys.path.insert(0, langgraph_path)
-                    from config import LLM_CONFIGS
-                    
-                    if selected_provider in LLM_CONFIGS:
-                        config = LLM_CONFIGS[selected_provider]
-                        st.text(f"Model: {config['model']}")
-                        st.text(f"Provider: {selected_provider}")
-                        st.text(f"Temperature Support: {'Yes' if config.get('supports_temperature', True) else 'No'}")
-                    else:
-                        st.text(f"Provider: {selected_provider}")
-                except Exception:
+                # Model information from centralized service config
+                import importlib.util
+                llm_providers_path = Path(__file__).parent.parent.parent / "agent_eval_service" / "config" / "llm_providers.py"
+                spec = importlib.util.spec_from_file_location("llm_providers", llm_providers_path)
+                llm_providers_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(llm_providers_module)
+                get_provider_config = llm_providers_module.get_provider_config
+                
+                provider_config = get_provider_config(selected_provider)
+                if provider_config:
+                    st.text(f"Model: {provider_config['model']}")
+                    st.text(f"Provider: {selected_provider}")
+                    st.text(f"Temperature Support: {'Yes' if provider_config.get('supports_temperature', True) else 'No'}")
+                else:
                     st.text(f"Provider: {selected_provider}")
                 
                 # Start Evaluation button right under Model Information
