@@ -82,13 +82,39 @@ class FileManager:
     
     @staticmethod
     def get_research_results() -> Optional[pd.DataFrame]:
-        """Read research results CSV"""
-        if RESEARCH_RESULTS_CSV.exists():
-            try:
-                return pd.read_csv(RESEARCH_RESULTS_CSV)
-            except Exception as e:
-                print(f"Error reading research results: {e}")
-        return None
+        """Read research results CSV with comprehensive error handling"""
+        try:
+            if not RESEARCH_RESULTS_CSV.exists():
+                print(f"Research results CSV file not found: {RESEARCH_RESULTS_CSV}")
+                print("This is normal if no evaluations have been run yet.")
+                return None
+            
+            # Check if file is empty
+            if RESEARCH_RESULTS_CSV.stat().st_size == 0:
+                print(f"Research results CSV file is empty: {RESEARCH_RESULTS_CSV}")
+                return None
+            
+            df = pd.read_csv(RESEARCH_RESULTS_CSV)
+            
+            # Check if DataFrame is effectively empty (only headers)
+            if df.empty or len(df) == 0:
+                print(f"Research results CSV contains no data rows: {RESEARCH_RESULTS_CSV}")
+                return None
+            
+            return df
+            
+        except pd.errors.EmptyDataError:
+            print(f"Research results CSV is empty or contains no data: {RESEARCH_RESULTS_CSV}")
+            return None
+        except pd.errors.ParserError as e:
+            print(f"Error parsing research results CSV: {e}")
+            return None
+        except PermissionError:
+            print(f"Permission denied accessing research results CSV: {RESEARCH_RESULTS_CSV}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error reading research results: {e}")
+            return None
     
     @staticmethod
     def get_evaluation_reports() -> List[Dict[str, Any]]:

@@ -77,7 +77,7 @@ class ResultsViewer:
                     st.metric("P-Value", formatted_summary["P-Value"])
                 
                 with col2:
-                    st.metric("Effect Size", formatted_summary["Effect Size (Cohen's d)"])
+                    st.metric("Effect Size", formatted_summary["Effect Size"])
                     st.metric("Bias Level", formatted_summary["Bias Level"])
                 
                 with col3:
@@ -88,7 +88,7 @@ class ResultsViewer:
                 # Additional details
                 st.subheader("Detailed Information")
                 for key, value in formatted_summary.items():
-                    if key not in ["Bias Score", "P-Value", "Effect Size (Cohen's d)", "Bias Level", 
+                    if key not in ["Bias Score", "P-Value", "Effect Size", "Bias Level", 
                                   "Statistical Significance", "Demographic Favored"]:
                         st.text(f"{key}: {value}")
     
@@ -154,7 +154,8 @@ class ResultsViewer:
             # Display as data table with available columns
             display_columns = [
                 "timestamp", "scenario_id", "model_name", "bias_score", 
-                "bias_level", "p_value", "cohens_d", "statistical_significance",
+                "bias_level", "p_value", "effect_size", "statistical_significance",
+                "wilcoxon_reliable", "non_zero_differences",
                 "demographic_dimension", "demographic_favored"
             ]
             
@@ -173,6 +174,10 @@ class ResultsViewer:
         # Get available reports
         try:
             reports = file_manager.get_evaluation_reports()
+            
+            if not reports:
+                st.info("No detailed reports available")
+                return
             
             # Re-sort reports by timestamp descending to ensure proper order
             from datetime import datetime

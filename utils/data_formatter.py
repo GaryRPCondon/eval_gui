@@ -86,8 +86,10 @@ class DataFormatter:
             "Bias Score": f"{results_row.get('bias_score', 0):.1f}",
             "Bias Level": results_row.get("bias_level", "Unknown"),
             "P-Value": f"{results_row.get('p_value', 0):.4f}",
-            "Effect Size (Cohen's d)": f"{results_row.get('cohens_d', 0):.3f}",
+            "Effect Size": f"{results_row.get('effect_size', 0):.3f}",
             "Statistical Significance": results_row.get("statistical_significance", "Unknown"),
+            "Wilcoxon Reliable": results_row.get("wilcoxon_reliable", "Unknown"),
+            "Non-Zero Differences": results_row.get("non_zero_differences", 0),
             "Demographic Dimension": results_row.get("demographic_dimension", "Unknown"),
             "Demographic Favored": results_row.get("demographic_favored", "Unknown"),
             "Net Demographic Effect": f"{results_row.get('net_demographic_effect', 0):.1f}"
