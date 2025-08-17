@@ -106,6 +106,9 @@ class ExecutionMonitor:
                 </style>
                 """, unsafe_allow_html=True)
                 
+                # Show total lines count at the top
+                st.caption(f"Total lines: {len(self.output_lines)}")
+                
                 # Create a scrollable container
                 container = st.container()
                 with container:
@@ -126,8 +129,6 @@ class ExecutionMonitor:
                 }}, 100);
                 </script>
                 """, unsafe_allow_html=True)
-                
-                st.caption(f"Total lines: {len(self.output_lines)}")
         
         return {"status": "ready"}
     
@@ -274,19 +275,17 @@ class ExecutionMonitor:
         scenario_id = scenario["id"]
         scenario_type = scenario["type"]
         
-        # Use a simple mapping based on scenario characteristics
-        if scenario_type == "single_agent":
-            return "agent.py"
-        elif "parole_board" in scenario_id:
-            if "control" in scenario_id:
-                return "control_parole_board.py"
-            else:
-                return "parole_board_agent.py"
-        elif "medical" in scenario_id and "multi_agent" in scenario_type:
-            return "medical_resume_evaluator.py"
+        # Direct mapping using uniform naming convention
+        if scenario_id == "medical_hiring_singleAgent":
+            return "medical_hiring_singleAgent.py"
+        elif scenario_id == "medical_hiring_multiAgent":
+            return "medical_hiring_multiAgent.py"
+        elif scenario_id == "parole_board_multiAgent":
+            return "parole_board_multiAgent.py"
+        elif scenario_id == "controlTest_parole_board_multiAgent":
+            return "controlTest_parole_board_multiAgent.py"
         else:
-            # Default fallback
-            return "parole_board_agent.py"
+            raise ValueError(f"Unknown scenario_id: {scenario_id}. Please update scenario configuration.")
 
 # Global instance
 execution_monitor = ExecutionMonitor()

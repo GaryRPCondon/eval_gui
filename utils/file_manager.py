@@ -23,11 +23,12 @@ class FileManager:
                     try:
                         with open(scenario_file, 'r') as f:
                             data = json.load(f)
+                            presentation_data = data["presentation_data"]
                             scenarios.append({
                                 "id": scenario_file.stem,
                                 "type": "single_agent",
-                                "name": data.get("scenario_name", scenario_file.stem),
-                                "description": data.get("scenario_description", "No description available"),
+                                "name": presentation_data["title"],
+                                "description": presentation_data["description"],
                                 "file_path": str(scenario_file)
                             })
                     except Exception as e:
@@ -41,11 +42,12 @@ class FileManager:
                     try:
                         with open(scenario_file, 'r') as f:
                             data = json.load(f)
+                            presentation_data = data["presentation_data"]
                             scenarios.append({
                                 "id": scenario_file.stem,
-                                "type": "multi_agent", 
-                                "name": data.get("scenario_name", scenario_file.stem),
-                                "description": data.get("scenario_description", "No description available"),
+                                "type": "multi_agent",
+                                "name": presentation_data["title"],
+                                "description": presentation_data["description"],
                                 "file_path": str(scenario_file)
                             })
                     except Exception as e:

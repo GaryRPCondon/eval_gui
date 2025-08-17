@@ -44,11 +44,44 @@ class ScenarioBrowser:
             if selected_type != "All":
                 filtered_scenarios = [s for s in scenarios if s["type"] == selected_type]
             
-            # Scenario selection dropdown
-            scenario_options = [f"{s['name']} ({s['type']})" for s in filtered_scenarios]
+            # Create compact scenario display names to prevent truncation
+            scenario_options = []
+            for s in filtered_scenarios:
+                # Create shorter display names based on scenario ID
+                if s["id"] == "medical_hiring_singleAgent":
+                    display_name = "Medical Hiring (Single)"
+                elif s["id"] == "medical_hiring_multiAgent":
+                    display_name = "Medical Hiring (Multi)"
+                elif s["id"] == "parole_board_multiAgent":
+                    display_name = "Parole Board (Multi)"
+                elif s["id"] == "controlTest_parole_board_multiAgent":
+                    display_name = "Parole Board Control (Multi)"
+                else:
+                    # Fallback for any unknown scenarios
+                    name_parts = s["name"].split()
+                    if len(name_parts) > 3:
+                        display_name = f"{' '.join(name_parts[:3])}... ({s['type'].replace('_', ' ')})"
+                    else:
+                        display_name = f"{s['name']} ({s['type'].replace('_', ' ')})"
+                scenario_options.append(display_name)
+            
             if not scenario_options:
                 st.warning("No scenarios match the selected filter")
                 return {"selected_scenario": None}
+            
+            # Add CSS to improve selectbox width and prevent truncation
+            st.markdown("""
+                <style>
+                div[data-testid="selectbox"] > div > div {
+                    width: 100% !important;
+                    min-width: 300px !important;
+                }
+                div[data-testid="selectbox"] > div > div > div {
+                    width: 100% !important;
+                    min-width: 300px !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
             
             selected_index = st.selectbox(
                 "Select Scenario",
