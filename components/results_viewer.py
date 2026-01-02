@@ -162,7 +162,7 @@ class ResultsViewer:
             available_columns = [col for col in display_columns if col in filtered_df.columns]
             st.dataframe(
                 filtered_df[available_columns],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
     

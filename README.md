@@ -58,10 +58,10 @@ eval_gui/
 ```
 
 ### Integration Patterns
-- **Scenarios**: Direct file system access to `scenarios/`
-- **LLM Providers**: API call to evaluation service
-- **Execution**: Subprocess calls to agent scripts
-- **Results**: Direct file system access to `results/`
+- **Scenarios**: Direct file system access to `scenarios/` (medical, parole, control)
+- **LLM Providers**: API call to evaluation service for dynamic model list
+- **Execution**: Subprocess calls to agent scripts (single-agent, multi-agent, control)
+- **Results**: Direct file system access to `results/` for analysis and reports
 
 ## Usage Workflow
 

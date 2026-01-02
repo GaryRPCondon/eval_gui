@@ -73,7 +73,7 @@ class LLMSelector:
             # Verbose mode toggle
             verbose = st.checkbox(
                 "Verbose Mode",
-                value=False,
+                value=True,
                 help="Enable detailed logging during evaluation execution",
                 key="verbose_checkbox"
             )
@@ -97,37 +97,6 @@ class LLMSelector:
                     st.text(f"Temperature Support: {'Yes' if provider_config.get('supports_temperature', True) else 'No'}")
                 else:
                     st.text(f"Provider: {selected_provider}")
-                
-                # Start Evaluation button right under Model Information
-                
-                # Custom CSS for a nice green button with fixed width
-                st.markdown("""
-                <style>
-                .stButton > button[kind="primary"] {
-                    background-color: #4CAF50 !important;
-                    border-color: #4CAF50 !important;
-                    width: 150px !important;
-                    max-width: 150px !important;
-                }
-                .stButton > button[kind="primary"]:hover {
-                    background-color: #45A049 !important;
-                    border-color: #45A049 !important;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                if scenario_selected and selected_provider:
-                    if st.button("Start Evaluation", type="primary", key="start_eval_from_llm"):
-                        # Set flag to start execution
-                        st.session_state.start_execution = True
-                        
-                        st.info("**Evaluation Started** - Switch to 'Evaluation Monitoring' tab to view progress")
-                else:
-                    st.button("Start Evaluation", disabled=True, key="start_eval_disabled")
-                    if not scenario_selected:
-                        st.caption("Select a scenario first")
-                    elif not selected_provider:
-                        st.caption("Select an LLM provider first")
         
         return {
             "selected_provider": selected_provider,

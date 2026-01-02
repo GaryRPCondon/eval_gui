@@ -162,7 +162,7 @@ class FileManager:
                         capturing_scenario = True
                         for part in parts[scenario_start_index:]:
                             if capturing_scenario and any(model_indicator in part.lower() 
-                                                       for model_indicator in ['gpt', 'claude', 'deepseek', 'grok']):
+                                                       for model_indicator in ['gpt', 'claude', 'deepseek', 'grok', 'mistral', 'gemini']):
                                 capturing_scenario = False
                             
                             if capturing_scenario:
