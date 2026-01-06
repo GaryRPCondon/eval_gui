@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+type: software
+title: "AI Agent Evaluation GUI"
+abstract: "Streamlit-based graphical interface for viewing and analysing AI agent bias evaluation results."
+authors:
+  - family-names: "Condon"
+    given-names: "Gary"
+    email: "garyrcondon@gmail.com"
+    orcid: "https://orcid.org/0009-0000-8769-2959"
+repository-code: "https://github.com/GaryRPCondon/eval_gui"
+license: MIT
+version: "1.0.0"
+date-released: "2026-01-06"
+keywords:
+  - visualisation
+  - bias analysis
+  - evaluation dashboard

@@ -101,3 +101,48 @@ eval_gui/
 - New metrics: Update CSV schema, no GUI changes needed
 - New filters: Read unique values from CSV data
 - New views: Add components following existing patterns
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Citation
+
+If you use this software in your research, please cite it as:
+
+```bibtex
+@software{Condon_AI_Agent_Evaluation_GUI_2026,
+  author = {Condon, Gary},
+  title = {AI Agent Evaluation GUI},
+  year = {2026},
+  url = {https://github.com/GaryRPCondon/eval_gui},
+  version = {1.0.0}
+}
+```
+
+Or cite the related thesis:
+
+```bibtex
+@mastersthesis{Condon_Bias_Evaluation_Framework_2025,
+  author = {Condon, Gary},
+  title = {Towards a framework for Bias Evaluation of AI Agents in Agentic Workflows},
+  school = {Technological University Dublin},
+  year = {2025},
+  type = {Master's Thesis}
+}
+```
+
+For citation in other formats, see [CITATION.cff](CITATION.cff).
+
+## Related Repositories
+
+This project is part of a larger AI agent evaluation ecosystem:
+
+- **[agent_eval_service](https://github.com/GaryRPCondon/agent_eval_service)**: Core evaluation service with bias detection and statistical analysis (framework-agnostic)
+- **[langgraph_agent](https://github.com/GaryRPCondon/langgraph_agent)**: LangGraph-based evaluation agents for single and multi-agent workflows
+
+## Support
+
+For questions, issues, or collaboration opportunities:
+- Open an issue on GitHub
+- Contact: garyrcondon@gmail.com
