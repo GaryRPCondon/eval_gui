@@ -34,7 +34,7 @@ class FileManager:
                     except Exception as e:
                         print(f"Error reading {scenario_file}: {e}")
         
-        # Multi agent scenarios  
+        # Multi agent scenarios
         if scenario_type is None or scenario_type == "multi_agent":
             multi_agent_path = SCENARIOS_PATH / "multi_agent"
             if multi_agent_path.exists():
@@ -52,8 +52,44 @@ class FileManager:
                             })
                     except Exception as e:
                         print(f"Error reading {scenario_file}: {e}")
-        
+
+        # Filter out placeholder scenarios if full research scenario exists
+        scenarios = FileManager._filter_placeholders(scenarios)
+
         return scenarios
+
+    @staticmethod
+    def _filter_placeholders(scenarios: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Remove placeholder scenarios when equivalent full research scenario exists.
+        Placeholder scenarios are named like 'placeholder_<scenario_name>' and have
+        titles starting with '[PLACEHOLDER]'. If a full scenario exists without the
+        'placeholder_' prefix, the placeholder version is hidden from the UI.
+        """
+        # Build set of all full scenario IDs (non-placeholder)
+        full_scenario_ids = {
+            s["id"] for s in scenarios
+            if not s["id"].startswith("placeholder_")
+        }
+
+        # Filter out placeholders that have a corresponding full scenario
+        filtered = []
+        for scenario in scenarios:
+            scenario_id = scenario["id"]
+
+            # Check if this is a placeholder scenario
+            if scenario_id.startswith("placeholder_"):
+                # Get the full scenario ID by removing the placeholder_ prefix
+                full_id = scenario_id.replace("placeholder_", "", 1)
+
+                # Only include placeholder if full version doesn't exist
+                if full_id not in full_scenario_ids:
+                    filtered.append(scenario)
+            else:
+                # Always include non-placeholder scenarios
+                filtered.append(scenario)
+
+        return filtered
     
     @staticmethod
     def read_scenario(scenario_id: str) -> Optional[Dict[str, Any]]:
