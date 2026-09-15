@@ -7,24 +7,42 @@ import json
 from typing import Dict, Any, List, Optional
 from utils.file_manager import file_manager
 from utils.data_formatter import data_formatter
+from utils import service_config
+from config.settings import PROJECT_ROOT
 
 class ScenarioBrowser:
     
-    def render(self) -> Dict[str, Any]:
-        """Render scenario selection and details"""
+    def render(self, framework_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Render scenario selection and details.
+
+        framework_config (from FrameworkSelector) lets the list flag scenarios
+        the selected framework has no script for; script_available in the
+        returned dict gates the Start button in app.py.
+        """
         
         st.header("Scenario Selection")
+        
+        framework_id = (framework_config or {}).get("selected_framework")
+        framework_name = (framework_config or {}).get("display_name") or "selected framework"
+        
+        def has_script(scenario_id: str) -> bool:
+            if not framework_id:
+                return True
+            try:
+                return service_config.agent_frameworks().framework_has_script(framework_id, scenario_id, PROJECT_ROOT)
+            except Exception:
+                return True
         
         # Get available scenarios
         try:
             scenarios = file_manager.get_scenarios_list()
         except Exception as e:
             st.error(f"Failed to load scenarios: {e}")
-            return {"selected_scenario": None}
+            return {"selected_scenario": None, "script_available": False}
         
         if not scenarios:
             st.warning("No scenarios found in the scenarios directory")
-            return {"selected_scenario": None}
+            return {"selected_scenario": None, "script_available": False}
         
         # Create scenario selection
         col1, col2 = st.columns([2, 3])
@@ -44,30 +62,18 @@ class ScenarioBrowser:
             if selected_type != "All":
                 filtered_scenarios = [s for s in scenarios if s["type"] == selected_type]
             
-            # Create compact scenario display names to prevent truncation
+            # Display names come from the scenario JSON title; flag scenarios the framework cannot run
             scenario_options = []
             for s in filtered_scenarios:
-                # Create shorter display names based on scenario ID
-                if s["id"] == "medical_hiring_singleAgent":
-                    display_name = "Medical Hiring (Single)"
-                elif s["id"] == "medical_hiring_multiAgent":
-                    display_name = "Medical Hiring (Multi)"
-                elif s["id"] == "parole_board_multiAgent":
-                    display_name = "Parole Board (Multi)"
-                elif s["id"] == "controlTest_parole_board_multiAgent":
-                    display_name = "Parole Board Control (Multi)"
-                else:
-                    # Fallback for any unknown scenarios
-                    name_parts = s["name"].split()
-                    if len(name_parts) > 3:
-                        display_name = f"{' '.join(name_parts[:3])}... ({s['type'].replace('_', ' ')})"
-                    else:
-                        display_name = f"{s['name']} ({s['type'].replace('_', ' ')})"
+                kind = "single" if s["type"] == "single_agent" else "multi"
+                display_name = f"{s['name']} [{kind}]"
+                if not has_script(s["id"]):
+                    display_name += f" - no {framework_name} script"
                 scenario_options.append(display_name)
             
             if not scenario_options:
                 st.warning("No scenarios match the selected filter")
-                return {"selected_scenario": None}
+                return {"selected_scenario": None, "script_available": False}
             
             # Add CSS to improve selectbox width and prevent truncation
             st.markdown("""
@@ -92,6 +98,9 @@ class ScenarioBrowser:
             )
             
             selected_scenario = filtered_scenarios[selected_index] if selected_index < len(filtered_scenarios) else None
+            script_available = has_script(selected_scenario["id"]) if selected_scenario else False
+            if selected_scenario and not script_available:
+                st.warning(f"{framework_name} has no script named {selected_scenario['id']}.py; choose another scenario or framework.")
         
         with col2:
             if selected_scenario:
@@ -112,6 +121,7 @@ class ScenarioBrowser:
         
         return {
             "selected_scenario": selected_scenario,
+            "script_available": script_available,
             "scenario_data": self._load_scenario_data(selected_scenario) if selected_scenario else None
         }
     

@@ -3,13 +3,17 @@ Execution monitoring component for running evaluations and tracking progress
 Improved version with fixed-height scrollable console
 """
 
-import streamlit as st
+import html
+import os
 import subprocess
 import threading
-import time
-import os
-from typing import Dict, Any, Optional, List
-from config.settings import LANGGRAPH_AGENT_PATH, PROJECT_ROOT
+from typing import Dict, Any, List
+
+import streamlit as st
+import streamlit.components.v1 as components
+
+from config.settings import PROJECT_ROOT
+from utils import service_config
 
 class ExecutionMonitor:
     
@@ -22,6 +26,8 @@ class ExecutionMonitor:
             st.session_state.monitor_process = None
             st.session_state.monitor_output = []
             st.session_state.monitor_is_running = False
+            st.session_state.monitor_returncode = None
+            st.session_state.monitor_cancelled = False
         
     @property
     def process(self):
@@ -42,16 +48,35 @@ class ExecutionMonitor:
     @is_running.setter
     def is_running(self, value):
         st.session_state.monitor_is_running = value
+    
+    @property
+    def returncode(self):
+        return st.session_state.monitor_returncode
+    
+    @returncode.setter
+    def returncode(self, value):
+        st.session_state.monitor_returncode = value
+    
+    @property
+    def cancelled(self):
+        return st.session_state.monitor_cancelled
+    
+    @cancelled.setter
+    def cancelled(self, value):
+        st.session_state.monitor_cancelled = value
         
-    def render(self, scenario_config: Dict[str, Any], llm_config: Dict[str, Any], hide_config: bool = False) -> Dict[str, Any]:
+    def render(self, scenario_config: Dict[str, Any], llm_config: Dict[str, Any], framework_config: Dict[str, Any] = None, hide_config: bool = False) -> Dict[str, Any]:
         """Render execution interface"""
         self._init_state()
+        framework_config = framework_config or {}
         
         # Check if we have required configuration
-        if not scenario_config.get("selected_scenario") or not llm_config.get("selected_provider"):
-            st.warning("Please configure scenario and LLM provider in the Setup tab first")
+        if not scenario_config.get("selected_scenario") or not llm_config.get("selected_provider") or not framework_config.get("selected_framework"):
+            st.warning("Please configure framework, scenario and LLM provider in the Setup tab first")
             return {"status": "not_configured"}
         
+        framework_id = framework_config["selected_framework"]
+        framework_name = framework_config.get("display_name", framework_id)
         scenario = scenario_config["selected_scenario"]
         provider = llm_config["selected_provider"]
         temperature = llm_config["temperature"]
@@ -63,7 +88,7 @@ class ExecutionMonitor:
             
             if not self.is_running:
                 # Auto-start the evaluation silently
-                self._start_evaluation(scenario, provider, temperature, verbose)
+                self._start_evaluation(framework_id, scenario, provider, temperature, verbose)
                 st.rerun() # Rerun to pick up the running state
             else:
                 st.warning("Evaluation is already running!")
@@ -75,6 +100,7 @@ class ExecutionMonitor:
             
             with col1:
                 st.subheader("Execution Configuration")
+                st.text(f"Framework: {framework_name}")
                 st.text(f"Scenario: {scenario['name']} ({scenario['type']})")
                 st.text(f"Model: {provider}")
                 st.text(f"Temperature: {temperature}")
@@ -84,7 +110,7 @@ class ExecutionMonitor:
                 # Execution controls
                 if not self.is_running:
                     if st.button("Start Evaluation", type="primary", key="start_eval_button"):
-                        self._start_evaluation(scenario, provider, temperature, verbose)
+                        self._start_evaluation(framework_id, scenario, provider, temperature, verbose)
                         st.rerun()
                 else:
                     if st.button("Cancel Evaluation", type="secondary", key="cancel_eval_button"):
@@ -112,21 +138,24 @@ class ExecutionMonitor:
         """
         # Check process status and update state if needed
         if self.is_running and self.process:
-            if self.process.poll() is not None:
+            code = self.process.poll()
+            if code is not None:
+                self.returncode = code
                 self.is_running = False
                 # Force a rerun to update the UI immediately after completion
                 st.rerun()
 
-        # Status display
+        # Status display, driven by the exit code rather than by matching words in the console output
         if self.is_running:
             st.info(f"🔄 Evaluation running...")
+        elif self.cancelled:
+            st.info("⏸️ Evaluation stopped by user")
+        elif self.returncode == 0:
+            st.success("✅ Evaluation completed successfully!")
+        elif self.returncode is not None:
+            st.error(f"❌ Evaluation failed (exit code {self.returncode})")
         elif self.output_lines:
-            if any("COMPLETED SUCCESSFULLY" in line for line in self.output_lines):
-                st.success("✅ Evaluation completed successfully!")
-            elif any("FAILED" in line for line in self.output_lines):
-                st.error("❌ Evaluation failed")
-            else:
-                st.info("⏸️ Evaluation stopped")
+            st.info("⏸️ Evaluation stopped")
         else:
             st.info(f"Ready to start.")
 
@@ -141,11 +170,7 @@ class ExecutionMonitor:
                 st.caption(f"{len(self.output_lines)} lines")
             
             # Escape HTML to prevent any interpretation
-            import html
             output_text = html.escape("\n".join(self.output_lines))
-            
-            # Use components.html to render the console properly
-            import streamlit.components.v1 as components
             
             console_html = f"""
             <!DOCTYPE html>
@@ -222,55 +247,40 @@ class ExecutionMonitor:
 
 
 
-    def _start_evaluation(self, scenario: Dict[str, Any], provider: str, temperature: float, verbose: bool):
-        """Start evaluation execution"""
+    def _start_evaluation(self, framework_id: str, scenario: Dict[str, Any], provider: str, temperature: float, verbose: bool):
+        """Start evaluation execution via the framework registry"""
+        
+        if os.name != 'nt':
+            st.error("Agent launch is supported from Windows only (the agents activate a Windows venv via cmd.exe).")
+            return
         
         try:
-            # Determine the correct script based on scenario type and ID
-            script_name = self._get_agent_script(scenario)
-            
-            # Build Windows command with virtual environment activation
-            venv_activation = r"..\agent_eval_langgraph\Scripts\activate"
-            
-            # Build python command with all arguments
-            python_args = [script_name, provider]
-            
-            # Check if provider supports temperature before adding the argument
-            try:
-                import importlib.util
-                llm_providers_path = LANGGRAPH_AGENT_PATH.parent / "agent_eval_service" / "config" / "llm_providers.py"
-                spec = importlib.util.spec_from_file_location("llm_providers", llm_providers_path)
-                llm_providers_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(llm_providers_module)
-                
-                provider_config = llm_providers_module.get_provider_config(provider)
-                provider_supports_temp = provider_config.get("supports_temperature", True)
-                
-                if temperature != 0.1 and provider_supports_temp:
-                    python_args.extend(["-t", str(temperature)])
-                elif temperature != 0.1 and not provider_supports_temp:
-                    if verbose:
-                        print(f"Warning: {provider} does not support temperature parameter. Using model default.")
-                        
-            except Exception as e:
-                if temperature != 0.1:
-                    python_args.extend(["-t", str(temperature)])
-            
-            if verbose:
-                python_args.append("-v")
-            
-            python_command = f"python {' '.join(python_args)}"
-            command = ["cmd.exe", "/c", f"{venv_activation} && {python_command}"]
+            # Temperature is passed whenever the provider supports it, so the script runs the value shown in the GUI
+            supports_temp = service_config.provider_supports_temperature(provider)
+            launch = service_config.agent_frameworks().build_launch_command(
+                framework_id,
+                scenario["id"],
+                provider,
+                temperature=temperature if supports_temp else None,
+                verbose=verbose,
+                project_root=PROJECT_ROOT,
+            )
+            command = launch["command"]
             
             # Reset state
             self.output_lines.clear()
-            self.output_lines.append(f"Starting command: {' '.join(command)}")
+            self.output_lines.append(f"[{framework_id}] cwd: {launch['cwd']}")
+            self.output_lines.append(f"Starting command: {launch['shell']}")
+            if not supports_temp:
+                self.output_lines.append(f"Note: {provider} does not support the temperature parameter; model default will be used.")
+            self.returncode = None
+            self.cancelled = False
             self.is_running = True
             
             # Start process
             process = subprocess.Popen(
                 command,
-                cwd=str(LANGGRAPH_AGENT_PATH),
+                cwd=str(launch["cwd"]),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -294,12 +304,24 @@ class ExecutionMonitor:
             self.is_running = False
     
     def _cancel_evaluation(self):
-        """Cancel running evaluation"""
+        """Cancel running evaluation, taking the whole process tree (cmd.exe, python agent, its MCP server)"""
         try:
             if self.process:
-                self.process.terminate()
+                if os.name == 'nt':
+                    subprocess.run(
+                        ["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                else:
+                    self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except Exception:
+                    pass
                 self.process = None
             
+            self.cancelled = True
             self.is_running = False
             self.output_lines.append("=== EVALUATION CANCELLED BY USER ===")
             
@@ -328,21 +350,6 @@ class ExecutionMonitor:
         
         except Exception as e:
             output_list.append(f"=== OUTPUT MONITORING ERROR: {e} ===")
-
-    def _get_agent_script(self, scenario: Dict[str, Any]) -> str:
-        """Get the appropriate agent script for a scenario"""
-        scenario_id = scenario["id"]
-        
-        if scenario_id == "medical_hiring_singleAgent":
-            return "medical_hiring_singleAgent.py"
-        elif scenario_id == "medical_hiring_multiAgent":
-            return "medical_hiring_multiAgent.py"
-        elif scenario_id == "parole_board_multiAgent":
-            return "parole_board_multiAgent.py"
-        elif scenario_id == "controlTest_parole_board_multiAgent":
-            return "controlTest_parole_board_multiAgent.py"
-        else:
-            raise ValueError(f"Unknown scenario_id: {scenario_id}")
 
 # Global instance
 execution_monitor = ExecutionMonitor()

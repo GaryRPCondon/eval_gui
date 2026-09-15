@@ -37,7 +37,7 @@ class ResultsViewer:
             self._render_results_history(results_df, key_prefix="results")
         
         with tab3:
-            self._render_detailed_reports()
+            self._render_detailed_reports(results_df)
         
         return {"status": "displayed"}
     
@@ -64,9 +64,11 @@ class ResultsViewer:
         for idx, (_, row) in enumerate(latest_results.iterrows()):
             formatted_summary = data_formatter.format_results_summary(row)
             
-            # Create expandable result card
+            # Create expandable result card (framework prefix when the CSV carries it)
+            framework = row.get("agentic_framework") if "agentic_framework" in row.index else None
+            prefix = f"[{framework}] " if isinstance(framework, str) and framework else ""
             with st.expander(
-                f"{formatted_summary['Model']} - {formatted_summary['Scenario']} - {formatted_summary['Bias Level']} Bias",
+                f"{prefix}{formatted_summary['Model']} - {formatted_summary['Scenario']} - {formatted_summary['Bias Level']} Bias",
                 expanded=(idx == 0)  # Expand first result by default
             ):
                 # Display key metrics in columns
@@ -98,7 +100,21 @@ class ResultsViewer:
         st.subheader("Results History")
         
         # Filters - use actual values from CSV data
-        col1, col2, col3, col4 = st.columns(4)
+        col0, col1, col2, col3, col4 = st.columns(5)
+        
+        with col0:
+            # Agent framework filter - only meaningful once the CSV carries the column
+            has_framework_column = "agentic_framework" in results_df.columns
+            if has_framework_column:
+                framework_values = results_df["agentic_framework"].fillna("unknown").astype(str).unique().tolist()
+                framework_options = ["All"] + sorted(framework_values)
+            else:
+                framework_options = ["All"]
+            selected_framework = st.selectbox(
+                "Framework", framework_options, key=f"{key_prefix}_framework_filter",
+                disabled=not has_framework_column,
+                help=None if has_framework_column else "agentic_framework column not present in research_results.csv"
+            )
         
         with col1:
             # Model filter
@@ -128,6 +144,9 @@ class ResultsViewer:
         # Apply filters
         filtered_df = results_df.copy()
         
+        if selected_framework != "All" and has_framework_column:
+            filtered_df = filtered_df[filtered_df["agentic_framework"].fillna("unknown").astype(str) == selected_framework]
+        
         if selected_model != "All":
             filtered_df = filtered_df[filtered_df["model_name"] == selected_model]
         
@@ -153,7 +172,7 @@ class ResultsViewer:
             
             # Display as data table with available columns
             display_columns = [
-                "timestamp", "scenario_id", "model_name", "bias_score", 
+                "timestamp", "scenario_id", "model_name", "agentic_framework", "bias_score", 
                 "bias_level", "p_value", "effect_size", "statistical_significance",
                 "wilcoxon_reliable", "non_zero_differences",
                 "demographic_dimension", "demographic_favored"
@@ -166,14 +185,14 @@ class ResultsViewer:
                 hide_index=True
             )
     
-    def _render_detailed_reports(self):
+    def _render_detailed_reports(self, results_df: pd.DataFrame = None):
         """Display detailed evaluation reports"""
         
         st.subheader("Detailed Reports")
         
-        # Get available reports
+        # Get available reports (joined to the CSV on evaluation_id for model/framework)
         try:
-            reports = file_manager.get_evaluation_reports()
+            reports = file_manager.get_evaluation_reports(results_df)
             
             if not reports:
                 st.info("No detailed reports available")
@@ -205,11 +224,13 @@ class ResultsViewer:
             st.info("No detailed reports available")
             return
         
-        # Debug: show first and last report timestamps to verify sorting
-        st.caption(f"Found {len(reports)} reports. Newest: {reports[0]['timestamp']}, Oldest: {reports[-1]['timestamp']}")
+        st.caption(f"{len(reports)} reports, newest {reports[0]['timestamp']}")
         
         # Report selection - default to newest (index 0) since reports are sorted descending
-        report_options = [f"{r['timestamp']} - {r['scenario_id']} - {r['model']}" for r in reports]
+        report_options = [
+            f"{r['timestamp']} - {r['scenario_id']} - {r['model']}" + (f" [{r['framework']}]" if r.get('framework') else "")
+            for r in reports
+        ]
             
         selected_index = st.selectbox(
             "Select Report",
@@ -223,13 +244,15 @@ class ResultsViewer:
             selected_report = reports[selected_index]
             
             # Display report metadata
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.text(f"Timestamp: {selected_report['timestamp']}")
             with col2:
                 st.text(f"Scenario: {selected_report['scenario_id']}")
             with col3:
                 st.text(f"Model: {selected_report['model']}")
+            with col4:
+                st.text(f"Framework: {selected_report.get('framework') or 'n/a'}")
             
             # Display report content
             try:

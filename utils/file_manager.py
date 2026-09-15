@@ -3,6 +3,7 @@ File system utilities for reading scenarios, results, and reports
 """
 
 import json
+import re
 import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -154,93 +155,88 @@ class FileManager:
             print(f"Unexpected error reading research results: {e}")
             return None
     
+    # Report filenames: YYYY-MM-DD_HHMMSS-<evaluation_id>-<model>.md (see markdown_report_service._generate_filename)
+    _REPORT_NAME_RE = re.compile(r"^(?P<timestamp>\d{4}-\d{2}-\d{2}_\d{6})-(?P<evaluation_id>mcp_eval_.+?_\d+)-(?P<model>.+)$")
+    _REPORT_HEADER_MODEL_RE = re.compile(r"\*\*Model\*\*:\s*(.+?)\s*\|")
+    _REPORT_HEADER_SCENARIO_RE = re.compile(r"\*\*Scenario\*\*:\s*(\S+)")
+    _REPORT_HEADER_FRAMEWORK_RE = re.compile(r"\*\*Framework\*\*:\s*(\S+)")
+
     @staticmethod
-    def get_evaluation_reports() -> List[Dict[str, Any]]:
-        """Get list of available evaluation reports"""
+    def _read_report_header(report_file: Path) -> Dict[str, str]:
+        """Model, scenario and framework from the report's own header line (first few lines only)."""
+        info: Dict[str, str] = {}
+        try:
+            with open(report_file, 'r', encoding='utf-8') as f:
+                head = "".join([next(f, "") for _ in range(6)])
+            for key, pattern in (("model", FileManager._REPORT_HEADER_MODEL_RE),
+                                 ("scenario_id", FileManager._REPORT_HEADER_SCENARIO_RE),
+                                 ("framework", FileManager._REPORT_HEADER_FRAMEWORK_RE)):
+                match = pattern.search(head)
+                if match:
+                    info[key] = match.group(1).strip()
+        except Exception as e:
+            print(f"Error reading report header {report_file}: {e}")
+        return info
+
+    @staticmethod
+    def get_evaluation_reports(results_df: Optional[pd.DataFrame] = None) -> List[Dict[str, Any]]:
+        """List evaluation reports with metadata.
+
+        Metadata comes, in order of preference, from the report header, from a
+        join on evaluation_id against the research results CSV (when passed),
+        and finally from the filename. Legacy filenames that match none of
+        these fall back to "unknown".
+        """
+        by_evaluation_id: Dict[str, Dict[str, Any]] = {}
+        if results_df is not None and "evaluation_id" in results_df.columns:
+            for _, row in results_df.iterrows():
+                by_evaluation_id[str(row["evaluation_id"])] = row
+
         reports = []
         if REPORTS_PATH.exists():
             for report_file in REPORTS_PATH.glob("*.md"):
                 try:
-                    # Parse filename for metadata
-                    filename = report_file.stem
-                    parts = filename.split('-')
-                    
-                    if len(parts) >= 3:
-                        # Parse full timestamp: 2025-08-05_122134 format
-                        timestamp_part = f"{parts[0]}-{parts[1]}-{parts[2]}"
-                        # Handle cases where the timestamp includes time (YYYY-MM-DD_HHMMSS)
-                        if '_' in timestamp_part:
-                            timestamp = timestamp_part  # Keep full timestamp with time
-                        else:
-                            timestamp = f"{parts[0]}-{parts[1]}"  # Fallback for older format
-                        
-                        # Extract evaluation_id if present (new format: YYYY-MM-DD_HHMMSS-evaluation_id.md)
-                        evaluation_id = ""
-                        scenario_start_index = 3  # Default start for scenario parts
-                        
-                        if len(parts) == 3 and parts[1].startswith('mcp_eval_'):
-                            # Current format: timestamp-evaluation_id-model.md
-                            evaluation_id = parts[1]
-                            scenario_start_index = 2  # Model part starts at index 2
-                        elif len(parts) == 2 and parts[1].startswith('mcp_eval_'):
-                            # Old simplified format: timestamp-evaluation_id.md
-                            evaluation_id = parts[1]
-                            scenario_start_index = len(parts)  # No more parts to process
-                        elif len(parts) >= 4 and parts[1].startswith('mcp_eval_'):
-                            # Old longer format: timestamp-evaluation_id-scenario-model.md
-                            evaluation_id = parts[1]
-                            scenario_start_index = 2
-                        
-                        scenario_parts = []
-                        model_parts = []
-                        
-                        # Find where scenario ends and model begins
-                        capturing_scenario = True
-                        for part in parts[scenario_start_index:]:
-                            if capturing_scenario and any(model_indicator in part.lower() 
-                                                       for model_indicator in ['gpt', 'claude', 'deepseek', 'grok', 'mistral', 'gemini']):
-                                capturing_scenario = False
-                            
-                            if capturing_scenario:
-                                scenario_parts.append(part)
-                            else:
-                                model_parts.append(part)
-                        
-                        # Extract scenario and model info
-                        if evaluation_id:
-                            # Extract scenario from evaluation_id format: mcp_eval_scenario_xxxx
-                            eval_parts = evaluation_id.split('_')
-                            if len(eval_parts) >= 3:
-                                scenario_id = '_'.join(eval_parts[2:-1])  # Skip mcp_eval and last number
-                            else:
-                                scenario_id = "unknown"
-                            
-                            # Extract model from filename parts if available
-                            if scenario_start_index < len(parts):
-                                model = '-'.join(parts[scenario_start_index:])
-                            else:
-                                model = "unknown"  # Old format without model in filename
-                        else:
-                            # Original format - extract from filename parts
-                            scenario_id = '-'.join(scenario_parts) if scenario_parts else "unknown"
-                            model = '-'.join(model_parts) if model_parts else "unknown"
-                        
-                        reports.append({
-                            "filename": report_file.name,
-                            "timestamp": timestamp,
-                            "scenario_id": scenario_id,
-                            "model": model,
-                            "evaluation_id": evaluation_id,  # Add evaluation_id for linking
-                            "file_path": str(report_file),
-                            "size": report_file.stat().st_size
-                        })
+                    match = FileManager._REPORT_NAME_RE.match(report_file.stem)
+                    if match:
+                        timestamp = match.group("timestamp")
+                        evaluation_id = match.group("evaluation_id")
+                        model = match.group("model")
+                        # evaluation_id embeds the scenario: mcp_eval_<scenario_id>_<n>
+                        scenario_id = evaluation_id[len("mcp_eval_"):].rsplit("_", 1)[0]
+                    else:
+                        parts = report_file.stem.split("-")
+                        timestamp = "-".join(parts[:3]) if len(parts) >= 3 else report_file.stem
+                        evaluation_id, model, scenario_id = "", "unknown", "unknown"
+
+                    header = FileManager._read_report_header(report_file)
+                    model = header.get("model", model)
+                    scenario_id = header.get("scenario_id", scenario_id)
+                    framework = header.get("framework")
+
+                    csv_row = by_evaluation_id.get(evaluation_id)
+                    if csv_row is not None:
+                        if pd.notna(csv_row.get("model_name")):
+                            model = str(csv_row.get("model_name"))
+                        if framework is None and "agentic_framework" in csv_row.index and pd.notna(csv_row.get("agentic_framework")):
+                            framework = str(csv_row.get("agentic_framework"))
+
+                    reports.append({
+                        "filename": report_file.name,
+                        "timestamp": timestamp,
+                        "scenario_id": scenario_id,
+                        "model": model,
+                        "framework": framework,
+                        "evaluation_id": evaluation_id,
+                        "file_path": str(report_file),
+                        "size": report_file.stat().st_size
+                    })
                 except Exception as e:
-                    print(f"Error parsing report filename {report_file}: {e}")
+                    print(f"Error parsing report {report_file}: {e}")
         
         # Sort by timestamp descending
         reports.sort(key=lambda x: x["timestamp"], reverse=True)
         return reports
-    
+
     @staticmethod
     def read_report(report_path: str) -> Optional[str]:
         """Read specific evaluation report"""

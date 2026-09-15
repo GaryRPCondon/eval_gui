@@ -5,6 +5,7 @@ Refined version with Wizard navigation and Wide layout
 
 import streamlit as st
 from config.settings import PAGE_TITLE, PAGE_ICON, LAYOUT
+from components.framework_selector import framework_selector
 from components.scenario_browser import scenario_browser
 from components.llm_selector import llm_selector
 from components.execution_monitor import execution_monitor
@@ -70,13 +71,13 @@ def main():
             background-color: rgba(28, 131, 225, 0.1) !important;
             border-left: 3px solid rgb(28, 131, 225) !important;
         }}
-        /* Make Start Evaluation button green */
-        .main button[data-testid="baseButton-primary"] {{
+        /* Make primary (Start Evaluation) buttons green; sidebar nav buttons are secondary */
+        .stButton > button[kind="primary"] {{
             background-color: #4CAF50 !important;
             border-color: #4CAF50 !important;
             color: white !important;
         }}
-        .main button[data-testid="baseButton-primary"]:hover {{
+        .stButton > button[kind="primary"]:hover {{
             background-color: #45A049 !important;
             border-color: #45A049 !important;
         }}
@@ -116,11 +117,14 @@ def main():
 def render_setup_page():
     st.header("Evaluation Setup")
     
+    # Framework first: scenario availability depends on it
+    framework_config = framework_selector.render()
+    
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        # Scenario selection
-        scenario_config = scenario_browser.render()
+        # Scenario selection (flags scenarios the framework has no script for)
+        scenario_config = scenario_browser.render(framework_config)
     
     with col2:
         # LLM configuration (pass scenario selection state)
@@ -128,34 +132,23 @@ def render_setup_page():
         llm_config = llm_selector.render(scenario_selected)
     
     # Store configuration in session state
+    st.session_state.framework_config = framework_config
     st.session_state.scenario_config = scenario_config
     st.session_state.llm_config = llm_config
     
     st.divider()
     
     # Action Bar - centered button with fixed width
+    framework_ok = bool(framework_config.get("available"))
     scenario_selected = scenario_config.get("selected_scenario") is not None
+    script_ok = bool(scenario_config.get("script_available"))
     llm_selected = llm_config.get("selected_provider") is not None
-    
-    # Add CSS for green button (same as was in llm_selector)
-    st.markdown("""
-    <style>
-    .stButton > button[kind="primary"] {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
-    }
-    .stButton > button[kind="primary"]:hover {
-        background-color: #45A049 !important;
-        border-color: #45A049 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
     
     # Create centered column layout for button
     col_left, col_center, col_right = st.columns([1, 1, 1])
     
     with col_center:
-        if scenario_selected and llm_selected:
+        if framework_ok and scenario_selected and script_ok and llm_selected:
             if st.button("Start Evaluation", type="primary", use_container_width=True, key="start_eval_main"):
                 # Set flag to auto-start in monitor page
                 st.session_state.start_execution = True
@@ -163,17 +156,27 @@ def render_setup_page():
                 st.session_state.current_page = "monitor"
                 st.rerun()
         else:
-            st.warning("Please select both a Scenario and an LLM Provider to proceed.")
+            missing = []
+            if not framework_ok:
+                missing.append(f"an available agent framework ({framework_config.get('reason') or 'none selected'})")
+            if not scenario_selected:
+                missing.append("a scenario")
+            elif not script_ok:
+                missing.append(f"a scenario the {framework_config.get('display_name') or 'selected'} framework has a script for")
+            if not llm_selected:
+                missing.append("an LLM provider")
+            st.warning("To proceed, select " + "; ".join(missing) + ".")
 
 def render_monitor_page():
     st.header("Evaluation Monitoring")
     
     # Get configuration from session state
+    framework_config = st.session_state.get('framework_config', {})
     scenario_config = st.session_state.get('scenario_config', {})
     llm_config = st.session_state.get('llm_config', {})
     
     # Execution interface
-    execution_monitor.render(scenario_config, llm_config, hide_config=False)
+    execution_monitor.render(scenario_config, llm_config, framework_config, hide_config=False)
 
 def render_results_page():
     st.header("Results Analysis")

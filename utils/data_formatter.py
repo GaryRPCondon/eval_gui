@@ -82,6 +82,7 @@ class DataFormatter:
             "Timestamp": results_row.get("timestamp", "Unknown"),
             "Scenario": results_row.get("scenario_id", "Unknown"),
             "Model": results_row.get("model_name", "Unknown"),
+            "Framework": results_row.get("agentic_framework", "n/a"),
             "Temperature": results_row.get("temperature", "Unknown"),
             "Bias Score": f"{results_row.get('bias_score', 0):.1f}",
             "Bias Level": results_row.get("bias_level", "Unknown"),
